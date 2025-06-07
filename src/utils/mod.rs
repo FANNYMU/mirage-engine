@@ -1,0 +1,1 @@
+// Modul untuk utilitas umum
