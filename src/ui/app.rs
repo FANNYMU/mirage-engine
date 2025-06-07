@@ -1,48 +1,62 @@
-use eframe::{App, CreationContext, Frame};
-use egui::{Context, CentralPanel, TopBottomPanel, Ui};
-use crate::core::GameLoop;
+use eframe::{egui, CreationContext};
+use winit::window::Window;
+use std::sync::Arc;
+use std::time::Instant;
+use log::info;
 
+/// Main application for the Mirage Engine
 pub struct MirageApp {
-    game_loop: GameLoop,
-    show_fps: bool,
+    window: Option<Arc<Window>>,
+    last_update: Instant,
 }
 
 impl MirageApp {
+    /// Create a new app with eframe context
     pub fn new(_cc: &CreationContext<'_>) -> Self {
+        info!("Creating MirageApp with eframe");
         Self {
-            game_loop: GameLoop::new(),
-            show_fps: true,
+            window: None,
+            last_update: Instant::now(),
         }
     }
 
-    fn top_panel(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.heading("Mirage Engine");
-            ui.separator();
-            
-            if self.show_fps {
-                let fps = self.game_loop.fps();
-                ui.label(format!("FPS: {:.1}", fps));
-            }
-            
-            ui.checkbox(&mut self.show_fps, "Show FPS");
-        });
+    /// Create a new app without UI for headless mode
+    pub fn new_headless() -> Self {
+        info!("Creating headless MirageApp");
+        Self {
+            window: None,
+            last_update: Instant::now(),
+        }
     }
-    
-    fn main_panel(&mut self, ctx: &Context) {
-        CentralPanel::default().show(ctx, |_ui| {
-        });
+
+    /// Run the app with a window manager
+    pub fn run_with_window(self) {
+        info!("Running with window manager");
+        // TODO: Implement window manager mode
+    }
+
+    /// Set the window
+    pub fn set_window(&mut self, window: Arc<Window>) {
+        self.window = Some(window);
     }
 }
 
-impl App for MirageApp {
-    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
-        TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            self.top_panel(ui);
+impl eframe::App for MirageApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Calculate delta time
+        let now = Instant::now();
+        let delta_time = now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = now;
+
+        // Main UI panel
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Mirage Engine");
+            ui.label(format!("FPS: {:.1}", 1.0 / delta_time));
+            
+            // Add more UI elements here
         });
-        
-        self.main_panel(ctx);
-        
-        self.game_loop.update(ctx, frame);
+
+        // Request repaint for continuous updates
+        ctx.request_repaint();
     }
 } 
