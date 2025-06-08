@@ -35,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             initial_window_size: Some(egui::vec2(1280.0, 720.0)),
             resizable: true,
             vsync: true,
+            centered: true,
             ..Default::default()
         };
         
@@ -52,20 +53,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// The main editor application
 struct EditorApp {
     editor_ui: EditorUI,
+    last_update_time: std::time::Instant,
 }
 
 impl EditorApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Set default egui style
+        let mut style = (*cc.egui_ctx.style()).clone();
+        style.visuals = egui::Visuals::dark();
+        cc.egui_ctx.set_style(style);
+        
         Self {
             editor_ui: EditorUI::new(),
+            last_update_time: std::time::Instant::now(),
         }
     }
 }
 
 impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // Calculate delta time
+        let now = std::time::Instant::now();
+        let delta_time = now.duration_since(self.last_update_time).as_secs_f32();
+        self.last_update_time = now;
+        
         // Update editor UI
-        self.editor_ui.update(ctx, 1.0 / 60.0); // Fixed delta time for now
+        self.editor_ui.update(ctx, delta_time);
+        
+        // Maintain window size
+        if let Some(original_size) = self.editor_ui.get_original_size() {
+            let current_size = frame.info().window_info.size;
+            if (current_size.x - original_size[0]).abs() > 1.0 || (current_size.y - original_size[1]).abs() > 1.0 {
+                frame.set_window_size(egui::vec2(original_size[0], original_size[1]));
+            }
+        }
+        
+        // Request continuous repainting
+        ctx.request_repaint();
     }
 }
 
