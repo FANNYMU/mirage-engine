@@ -4,6 +4,7 @@ mod ui;
 mod rendering;
 mod utils;
 mod ecs;
+mod audio;
 
 use eframe::{NativeOptions, run_native};
 use ui::{MirageApp, EditorUI};

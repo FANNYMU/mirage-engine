@@ -23,6 +23,7 @@ eframe = "0.22"
 hecs = "0.10"
 uuid = { version = "1.3", features = ["v4"] }
 chrono = "0.4"
+rodio = "0.17"
 
 [lib]
 name = "mirage_engine"

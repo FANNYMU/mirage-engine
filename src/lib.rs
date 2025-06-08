@@ -1,9 +1,18 @@
-pub mod core;
-pub mod scene;
-pub mod ui;
-pub mod rendering;
-pub mod utils;
-pub mod ecs;
+mod core;
+mod scene;
+mod ui;
+mod rendering;
+mod utils;
+mod ecs;
+pub mod audio;
+
+pub use core::*;
+pub use scene::*;
+pub use ui::*;
+pub use rendering::*;
+pub use utils::*;
+pub use ecs::*;
+pub use audio::*;
 
 // Re-export common types
 pub use rendering::{

@@ -2,6 +2,4 @@
 
 A game engine built with Rust.
 
-![Preview](assets/image.png)
-
-**BELOM JADI😹**
+![Mirage Engine Editor Preview](assets/MirageEngineEditor.png)

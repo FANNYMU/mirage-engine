@@ -1,7 +1,9 @@
 mod app;
-mod editor;
 mod window;
+mod editor;
+mod editor_components;
 
 pub use app::MirageApp;
-pub use editor::EditorUI;
-pub use window::WindowManager; 
+pub use window::WindowManager;
+pub use editor::*;
+pub use editor_components::*; 

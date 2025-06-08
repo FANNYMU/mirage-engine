@@ -1,0 +1,19 @@
+pub mod ui_components;
+pub mod hierarchy;
+pub mod inspector;
+pub mod project;
+pub mod scene_view;
+pub mod game_view;
+pub mod audio_panel;
+pub mod console;
+pub mod editor_ui;
+
+pub use ui_components::*;
+pub use hierarchy::HierarchyPanel;
+pub use inspector::InspectorPanel;
+pub use project::ProjectPanel;
+pub use scene_view::SceneViewPanel;
+pub use game_view::GameViewPanel;
+pub use audio_panel::AudioPanel;
+pub use console::ConsolePanel;
+pub use editor_ui::EditorUI; 
