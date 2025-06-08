@@ -5,7 +5,6 @@ use winit::{
 };
 use log::{info, debug};
 
-/// Struct untuk menyimpan state dari input keyboard
 pub struct KeyboardState {
     pub keys_pressed: Vec<VirtualKeyCode>,
     pub keys_released: Vec<VirtualKeyCode>,
@@ -39,7 +38,6 @@ impl KeyboardState {
     }
 }
 
-/// Struct untuk menyimpan state dari input mouse
 pub struct MouseState {
     pub position: (f64, f64),
     pub buttons_pressed: Vec<MouseButton>,
@@ -78,7 +76,6 @@ impl MouseState {
     }
 }
 
-/// Struct untuk mengelola window dan event
 pub struct WindowManager {
     event_loop: Option<EventLoop<()>>,
     window: Option<Window>,
@@ -179,7 +176,6 @@ impl WindowManager {
                 }
                 
                 Event::MainEventsCleared => {
-                    // Aplikasi update dan render
                     if self.should_close {
                         *control_flow = ControlFlow::Exit;
                     }
@@ -191,7 +187,6 @@ impl WindowManager {
             callback(&mut self, &event);
             
             if let Event::MainEventsCleared = event {
-                // Reset input states setelah frame selesai
                 self.keyboard_state.update();
                 self.mouse_state.update();
             }
