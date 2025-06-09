@@ -1,17 +1,20 @@
 use egui::{Context, Ui, ScrollArea, RichText, Color32, Vec2, Frame, Rect, Stroke};
 use std::collections::HashMap;
 use crate::ui::editor::ui_components::{EntityComponent, ComponentType, EntityTransform};
+use std::sync::{Arc, Mutex};
 
 /// Inspector panel for editing entity properties
 pub struct InspectorPanel {
     /// Component expanded states
     pub component_expanded: HashMap<String, bool>,
-    /// Entity transforms
-    pub entity_transforms: HashMap<u32, EntityTransform>,
+    /// Entity transforms - shared between inspector and scene view
+    pub entity_transforms: Arc<Mutex<HashMap<u32, EntityTransform>>>,
     /// Show add component menu
     pub show_add_component_menu: bool,
     /// Add component search text
     pub add_component_search: String,
+    /// Dirty flag to track changes
+    pub dirty: bool,
 }
 
 impl InspectorPanel {
@@ -19,159 +22,104 @@ impl InspectorPanel {
     pub fn new() -> Self {
         Self {
             component_expanded: HashMap::new(),
-            entity_transforms: HashMap::new(),
+            entity_transforms: Arc::new(Mutex::new(HashMap::new())),
             show_add_component_menu: false,
             add_component_search: String::new(),
+            dirty: false,
         }
     }
     
     /// Set entity transforms
-    pub fn set_entity_transforms(&mut self, entity_transforms: HashMap<u32, EntityTransform>) {
+    pub fn set_entity_transforms(&mut self, entity_transforms: Arc<Mutex<HashMap<u32, EntityTransform>>>) {
         self.entity_transforms = entity_transforms;
+    }
+    
+    /// Get entity transforms
+    pub fn get_entity_transforms(&self) -> Arc<Mutex<HashMap<u32, EntityTransform>>> {
+        self.entity_transforms.clone()
     }
     
     /// Render the inspector panel
     pub fn render(&mut self, ui: &mut Ui, selected_entity: Option<u32>, entity_names: &HashMap<u32, String>, log_info: &mut dyn FnMut(&str)) {
-        // Unity-like header
-        ui.horizontal(|ui| {
+        ui.vertical(|ui| {
             ui.heading("Inspector");
-        });
-        
-        ui.separator();
-        
-        if let Some(entity_id) = selected_entity {
-            if let Some(entity_name) = entity_names.get(&entity_id) {
-                // Entity Header with name and enable checkbox
-                Frame::none()
-                    .fill(Color32::from_rgb(60, 60, 60))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let mut is_enabled = true;
-                            ui.checkbox(&mut is_enabled, "");
-                            
-                            let mut name = entity_name.clone();
-                            ui.text_edit_singleline(&mut name);
-                            
-                            if ui.button("⋮").clicked() {
-                                log_info("Entity options menu clicked");
+            ui.separator();
+            
+            if let Some(entity_id) = selected_entity {
+                if let Some(name) = entity_names.get(&entity_id) {
+                    // Entity header
+                    ui.horizontal(|ui| {
+                        ui.heading(name);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Add Component").clicked() {
+                                self.show_add_component_menu = true;
+                                log_info(&format!("Add component menu opened for entity {}", entity_id));
                             }
                         });
                     });
-                
-                // Static tag/layer row
-                ui.horizontal(|ui| {
-                    ui.label("Tag");
-                    ui.add_space(5.0);
                     
-                    let mut tag = "Untagged".to_string();
-                    egui::ComboBox::from_label("")
-                        .selected_text(&tag)
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut tag, "Untagged".to_string(), "Untagged");
-                            ui.selectable_value(&mut tag, "Player".to_string(), "Player");
-                            ui.selectable_value(&mut tag, "Enemy".to_string(), "Enemy");
-                            ui.selectable_value(&mut tag, "MainCamera".to_string(), "MainCamera");
-                        });
+                    ui.separator();
                     
-                    ui.add_space(20.0);
+                    // Render add component menu if opened
+                    if self.show_add_component_menu {
+                        self.render_add_component_menu(ui, entity_id, log_info);
+                    }
                     
-                    ui.label("Layer");
-                    ui.add_space(5.0);
-                    
-                    let mut layer = "Default".to_string();
-                    egui::ComboBox::from_label("")
-                        .selected_text(&layer)
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut layer, "Default".to_string(), "Default");
-                            ui.selectable_value(&mut layer, "UI".to_string(), "UI");
-                            ui.selectable_value(&mut layer, "Player".to_string(), "Player");
-                            ui.selectable_value(&mut layer, "Environment".to_string(), "Environment");
-                        });
-                });
-                
-                ui.add_space(5.0);
-                
-                ScrollArea::vertical().show(ui, |ui| {
                     // Always show Transform component
                     self.render_transform_component(ui, entity_id, log_info);
                     
-                    // Show other components
+                    // Render other components
                     let components = self.get_entity_components(entity_id);
+                    
                     for component in components {
                         self.render_component(ui, &component, entity_id, log_info);
                     }
                     
-                    // Add Component button
-                    ui.add_space(10.0);
-                    if ui.button("Add Component").clicked() {
-                        self.show_add_component_menu = true;
-                    }
-                });
-                
-                // Render add component menu if needed
-                if self.show_add_component_menu {
-                    self.render_add_component_menu(ui, entity_id, log_info);
+                    // Reset dirty flag
+                    self.dirty = false;
+                } else {
+                    ui.label("Entity name not found");
                 }
             } else {
-                ui.label("Selected entity not found");
+                ui.label("No entity selected");
             }
-        } else {
-            ui.weak("No entity selected");
-        }
+        });
     }
     
     /// Get components for an entity
     fn get_entity_components(&self, entity_id: u32) -> Vec<EntityComponent> {
-        // In a real engine, this would query the ECS
-        // For now, return mock components based on entity ID
+        // For demo, return some mock components based on entity ID
+        // In a real implementation, this would query the ECS
+        let mut components = Vec::new();
         
-        match entity_id {
-            1 => vec![
-                EntityComponent {
-                    name: "Camera".to_string(),
-                    component_type: ComponentType::Camera,
-                    removable: false,
-                },
-            ],
-            2 => vec![
-                EntityComponent {
-                    name: "Light".to_string(),
-                    component_type: ComponentType::Light,
-                    removable: false,
-                },
-            ],
-            3 => vec![
-                EntityComponent {
-                    name: "Sprite Renderer".to_string(),
-                    component_type: ComponentType::SpriteRenderer,
-                    removable: true,
-                },
-                EntityComponent {
-                    name: "Rigidbody 2D".to_string(),
-                    component_type: ComponentType::Rigidbody2D,
-                    removable: true,
-                },
-                EntityComponent {
-                    name: "Box Collider 2D".to_string(),
-                    component_type: ComponentType::BoxCollider2D,
-                    removable: true,
-                },
-                EntityComponent {
-                    name: "Player Script".to_string(),
-                    component_type: ComponentType::LuaScript,
-                    removable: true,
-                },
-            ],
-            4 => vec![
-                EntityComponent {
-                    name: "Sprite Renderer".to_string(),
-                    component_type: ComponentType::SpriteRenderer,
-                    removable: true,
-                },
-            ],
-            5 => vec![],
-            _ => vec![],
+        // Even IDs get a Camera component
+        if entity_id % 2 == 0 {
+            components.push(EntityComponent {
+                name: "Camera".to_string(),
+                component_type: ComponentType::Camera,
+                removable: true,
+            });
         }
+        
+        // IDs divisible by 3 get a Light component
+        if entity_id % 3 == 0 {
+            components.push(EntityComponent {
+                name: "Light".to_string(),
+                component_type: ComponentType::Light,
+                removable: true,
+            });
+        }
+        
+        // IDs divisible by 5 get a SpriteRenderer component
+        if entity_id % 5 == 0 {
+            components.push(EntityComponent {
+                name: "Sprite Renderer".to_string(),
+                component_type: ComponentType::SpriteRenderer,
+                removable: true,
+            });
+        }
+        
+        components
     }
     
     /// Render a component in the inspector
@@ -201,8 +149,15 @@ impl InspectorPanel {
                     
                     // Component menu button
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if component.removable {
+                            if ui.button("✕").clicked() {
+                                log_info(&format!("Remove {} component clicked", component.name));
+                                // In a real implementation, this would remove the component
+                            }
+                        }
+                        
                         if ui.button("⋮").clicked() {
-                            log_info(&format!("Component menu for {} clicked", component.name));
+                            log_info(&format!("{} component menu clicked", component.name));
                         }
                     });
                 });
@@ -233,13 +188,11 @@ impl InspectorPanel {
     
     /// Render transform component
     fn render_transform_component(&mut self, ui: &mut Ui, entity_id: u32, log_info: &mut dyn FnMut(&str)) {
-        let transform = self.entity_transforms.entry(entity_id).or_insert_with(|| {
-            EntityTransform {
-                position: [0.0, 0.0, 0.0],
-                rotation: [0.0, 0.0, 0.0],
-                scale: [1.0, 1.0, 1.0],
-            }
-        });
+        // Get timestamp saat ini
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
         
         // Unity-style component header
         Frame::none()
@@ -271,102 +224,270 @@ impl InspectorPanel {
                 .fill(Color32::from_rgb(50, 50, 50))
                 .inner_margin(egui::style::Margin::symmetric(10.0, 5.0))
                 .show(ui, |ui| {
+                    // Ambil transformasi dari shared state setiap kali render
+                    let mut transform = {
+                        let transforms = self.entity_transforms.lock().unwrap();
+                        transforms.get(&entity_id).cloned().unwrap_or_else(|| {
+                            EntityTransform {
+                                position: [0.0, 0.0, 0.0],
+                                rotation: [0.0, 0.0, 0.0],
+                                scale: [1.0, 1.0, 1.0],
+                                last_update: current_time,
+                            }
+                        })
+                    };
+                    
                     let mut changed = false;
+                    let available_width = ui.available_width();
                     
                     // Position row with xyz inputs
                     ui.horizontal(|ui| {
-                        ui.label("Position");
-                        ui.add_space(5.0);
+                        let label_width = 60.0;
+                        let field_width = (available_width - label_width - 20.0) / 3.0;
+                        
+                        ui.add_sized([label_width, 20.0], egui::Label::new("Position"));
                         
                         // X input with label
                         ui.horizontal(|ui| {
-                            ui.label("X");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.position[0])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("X"));
+                            let x_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.position[0])
+                                    .speed(0.1)
+                                    .prefix("")
+                                    .fixed_decimals(3)
+                                    .clamp_range(-1000.0..=1000.0)
+                            );
+                            
+                            if x_response.changed() {
+                                changed = true;
+                                // Update position langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.position[0] = transform.position[0];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Y input with label
                         ui.horizontal(|ui| {
-                            ui.label("Y");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.position[1])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Y"));
+                            let y_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.position[1])
+                                    .speed(0.1)
+                                    .prefix("")
+                                    .fixed_decimals(3)
+                                    .clamp_range(-1000.0..=1000.0)
+                            );
+                            
+                            if y_response.changed() {
+                                changed = true;
+                                // Update position langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.position[1] = transform.position[1];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Z input with label
                         ui.horizontal(|ui| {
-                            ui.label("Z");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.position[2])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Z"));
+                            let z_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.position[2])
+                                    .speed(0.1)
+                                    .prefix("")
+                                    .fixed_decimals(3)
+                                    .clamp_range(-1000.0..=1000.0)
+                            );
+                            
+                            if z_response.changed() {
+                                changed = true;
+                                // Update position langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.position[2] = transform.position[2];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                     });
                     
                     // Rotation row with xyz inputs
                     ui.horizontal(|ui| {
-                        ui.label("Rotation");
-                        ui.add_space(5.0);
+                        let label_width = 60.0;
+                        let field_width = (available_width - label_width - 20.0) / 3.0;
+                        
+                        ui.add_sized([label_width, 20.0], egui::Label::new("Rotation"));
                         
                         // X input with label
                         ui.horizontal(|ui| {
-                            ui.label("X");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.rotation[0])
-                                .speed(1.0)
-                                .fixed_decimals(1)
-                                .suffix("°")).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("X"));
+                            let x_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.rotation[0])
+                                    .speed(1.0)
+                                    .fixed_decimals(1)
+                                    .suffix("°")
+                            );
+                            
+                            if x_response.changed() {
+                                changed = true;
+                                // Update rotation langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.rotation[0] = transform.rotation[0];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Y input with label
                         ui.horizontal(|ui| {
-                            ui.label("Y");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.rotation[1])
-                                .speed(1.0)
-                                .fixed_decimals(1)
-                                .suffix("°")).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Y"));
+                            let y_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.rotation[1])
+                                    .speed(1.0)
+                                    .fixed_decimals(1)
+                                    .suffix("°")
+                            );
+                            
+                            if y_response.changed() {
+                                changed = true;
+                                // Update rotation langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.rotation[1] = transform.rotation[1];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Z input with label
                         ui.horizontal(|ui| {
-                            ui.label("Z");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.rotation[2])
-                                .speed(1.0)
-                                .fixed_decimals(1)
-                                .suffix("°")).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Z"));
+                            let z_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.rotation[2])
+                                    .speed(1.0)
+                                    .fixed_decimals(1)
+                                    .suffix("°")
+                            );
+                            
+                            if z_response.changed() {
+                                changed = true;
+                                // Update rotation langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.rotation[2] = transform.rotation[2];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                     });
                     
                     // Scale row with xyz inputs
                     ui.horizontal(|ui| {
-                        ui.label("Scale");
-                        ui.add_space(13.0);
+                        let label_width = 60.0;
+                        let field_width = (available_width - label_width - 20.0) / 3.0;
+                        
+                        ui.add_sized([label_width, 20.0], egui::Label::new("Scale"));
                         
                         // X input with label
                         ui.horizontal(|ui| {
-                            ui.label("X");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.scale[0])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("X"));
+                            let x_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.scale[0])
+                                    .speed(0.1)
+                                    .fixed_decimals(3)
+                                    .clamp_range(0.001..=100.0)
+                            );
+                            
+                            if x_response.changed() {
+                                changed = true;
+                                // Update scale langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.scale[0] = transform.scale[0];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Y input with label
                         ui.horizontal(|ui| {
-                            ui.label("Y");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.scale[1])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Y"));
+                            let y_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.scale[1])
+                                    .speed(0.1)
+                                    .fixed_decimals(3)
+                                    .clamp_range(0.001..=100.0)
+                            );
+                            
+                            if y_response.changed() {
+                                changed = true;
+                                // Update scale langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.scale[1] = transform.scale[1];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                         
                         // Z input with label
                         ui.horizontal(|ui| {
-                            ui.label("Z");
-                            changed |= ui.add(egui::DragValue::new(&mut transform.scale[2])
-                                .speed(0.1)
-                                .fixed_decimals(3)).changed();
+                            ui.add_sized([15.0, 20.0], egui::Label::new("Z"));
+                            let z_response = ui.add_sized(
+                                [field_width, 20.0], 
+                                egui::DragValue::new(&mut transform.scale[2])
+                                    .speed(0.1)
+                                    .fixed_decimals(3)
+                                    .clamp_range(0.001..=100.0)
+                            );
+                            
+                            if z_response.changed() {
+                                changed = true;
+                                // Update scale langsung
+                                let mut transforms = self.entity_transforms.lock().unwrap();
+                                if let Some(t) = transforms.get_mut(&entity_id) {
+                                    t.scale[2] = transform.scale[2];
+                                    t.last_update = current_time;
+                                }
+                            }
                         });
                     });
                     
+                    // Reset button
+                    ui.horizontal(|ui| {
+                        ui.add_space(ui.available_width() - 100.0);
+                        if ui.button("Reset").clicked() {
+                            let mut default_transform = EntityTransform::default();
+                            // Set Z ke -10 untuk kamera
+                            if entity_id == 1 {
+                                default_transform.position[2] = -10.0;
+                            }
+                            default_transform.last_update = current_time;
+                            
+                            // Update transform di shared state langsung saat reset
+                            let mut transforms = self.entity_transforms.lock().unwrap();
+                            transforms.insert(entity_id, default_transform.clone());
+                            transform = default_transform;
+                            
+                            changed = true;
+                            log_info("Transform reset to default");
+                        }
+                    });
+                    
                     if changed {
+                        self.dirty = true;
                         log_info(&format!("Updated transform for entity {}", entity_id));
                     }
                 });
@@ -387,26 +508,33 @@ impl InspectorPanel {
         let mut orthographic_size = 5.0;
         let mut hdr = true;
         let mut allow_msaa = true;
+        let available_width = ui.available_width();
         
-        // Define field layout function
+        // Define field layout function with fixed widths
         let field_layout = |ui: &mut Ui, label: &str, content: Box<dyn FnOnce(&mut Ui)>| {
             ui.horizontal(|ui| {
-                ui.label(label);
-                ui.add_space(ui.available_width() * 0.3 - label.len() as f32 * 7.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    content(ui);
-                });
+                ui.add_sized([120.0, 20.0], egui::Label::new(label));
+                let content_width = available_width - 120.0;
+                ui.allocate_ui_with_layout(
+                    egui::Vec2::new(content_width, 20.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| { content(ui); }
+                );
             });
         };
         
         field_layout(ui, "Clear Flags", Box::new(|ui| {
+            let mut tmp_clear_flags = clear_flags;
             egui::ComboBox::from_id_source("clear_flags")
-                .selected_text(clear_flag_options[clear_flags])
+                .selected_text(clear_flag_options[tmp_clear_flags])
                 .show_ui(ui, |ui| {
                     for (i, &flag) in clear_flag_options.iter().enumerate() {
-                        ui.selectable_value(&mut clear_flags, i, flag);
+                        if ui.selectable_label(tmp_clear_flags == i, flag).clicked() {
+                            tmp_clear_flags = i;
+                        }
                     }
                 });
+            clear_flags = tmp_clear_flags;
         }));
         
         field_layout(ui, "Background", Box::new(|ui| {
@@ -422,7 +550,9 @@ impl InspectorPanel {
                     .selected_text(proj_options[tmp_projection])
                     .show_ui(ui, |ui| {
                         for (i, &option) in proj_options.iter().enumerate() {
-                            ui.selectable_value(&mut tmp_projection, i, option);
+                            if ui.selectable_label(tmp_projection == i, option).clicked() {
+                                tmp_projection = i;
+                            }
                         }
                     });
             }));
@@ -432,11 +562,11 @@ impl InspectorPanel {
         // Render appropriate fields based on projection type
         if projection == 0 {
             field_layout(ui, "Field of View", Box::new(|ui| {
-                ui.add(egui::Slider::new(&mut fov, 1.0..=179.0).suffix("°"));
+                ui.add(egui::Slider::new(&mut fov, 1.0..=179.0).suffix("°").fixed_decimals(1));
             }));
         } else {
             field_layout(ui, "Size", Box::new(|ui| {
-                ui.add(egui::DragValue::new(&mut orthographic_size).speed(0.1));
+                ui.add(egui::DragValue::new(&mut orthographic_size).speed(0.1).fixed_decimals(2));
             }));
         }
         
@@ -473,15 +603,18 @@ impl InspectorPanel {
         let mut shadow_enabled = true;
         let mut shadow_resolution = 1;
         let shadow_resolutions = ["Low", "Medium", "High", "Very High"];
+        let available_width = ui.available_width();
         
-        // Define field layout function
+        // Define field layout function with fixed widths
         let field_layout = |ui: &mut Ui, label: &str, content: Box<dyn FnOnce(&mut Ui)>| {
             ui.horizontal(|ui| {
-                ui.label(label);
-                ui.add_space(ui.available_width() * 0.3 - label.len() as f32 * 7.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    content(ui);
-                });
+                ui.add_sized([120.0, 20.0], egui::Label::new(label));
+                let content_width = available_width - 120.0;
+                ui.allocate_ui_with_layout(
+                    egui::Vec2::new(content_width, 20.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| { content(ui); }
+                );
             });
         };
         
@@ -493,7 +626,9 @@ impl InspectorPanel {
                     .selected_text(light_types[tmp_light_type])
                     .show_ui(ui, |ui| {
                         for (i, &light_name) in light_types.iter().enumerate() {
-                            ui.selectable_value(&mut tmp_light_type, i, light_name);
+                            if ui.selectable_label(tmp_light_type == i, light_name).clicked() {
+                                tmp_light_type = i;
+                            }
                         }
                     });
             }));
@@ -505,13 +640,13 @@ impl InspectorPanel {
         }));
         
         field_layout(ui, "Intensity", Box::new(|ui| {
-            ui.add(egui::Slider::new(&mut intensity, 0.0..=10.0));
+            ui.add(egui::Slider::new(&mut intensity, 0.0..=10.0).fixed_decimals(2));
         }));
         
         // Range slider for non-directional lights
         if light_type != 0 {
             field_layout(ui, "Range", Box::new(|ui| {
-                ui.add(egui::Slider::new(&mut range, 1.0..=100.0).logarithmic(true));
+                ui.add(egui::Slider::new(&mut range, 1.0..=100.0).logarithmic(true).fixed_decimals(1));
             }));
         }
         
@@ -526,15 +661,19 @@ impl InspectorPanel {
         
         // Shadow quality settings if shadows are enabled
         if shadow_enabled {
+            let mut tmp_shadow_resolution = shadow_resolution;
             field_layout(ui, "Shadow Quality", Box::new(|ui| {
                 egui::ComboBox::from_id_source("shadow_resolution")
-                    .selected_text(shadow_resolutions[shadow_resolution])
+                    .selected_text(shadow_resolutions[tmp_shadow_resolution])
                     .show_ui(ui, |ui| {
                         for (i, &res_name) in shadow_resolutions.iter().enumerate() {
-                            ui.selectable_value(&mut shadow_resolution, i, res_name);
+                            if ui.selectable_label(tmp_shadow_resolution == i, res_name).clicked() {
+                                tmp_shadow_resolution = i;
+                            }
                         }
                     });
             }));
+            shadow_resolution = tmp_shadow_resolution;
         }
     }
     
@@ -547,22 +686,25 @@ impl InspectorPanel {
         let mut material = "Default Sprite".to_string();
         let mut flip_x = false;
         let mut flip_y = false;
+        let available_width = ui.available_width();
         
-        // Define field layout function
+        // Define field layout function with fixed widths
         let field_layout = |ui: &mut Ui, label: &str, content: Box<dyn FnOnce(&mut Ui)>| {
             ui.horizontal(|ui| {
-                ui.label(label);
-                ui.add_space(ui.available_width() * 0.3 - label.len() as f32 * 7.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    content(ui);
-                });
+                ui.add_sized([120.0, 20.0], egui::Label::new(label));
+                let content_width = available_width - 120.0;
+                ui.allocate_ui_with_layout(
+                    egui::Vec2::new(content_width, 20.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| { content(ui); }
+                );
             });
         };
         
         field_layout(ui, "Sprite", Box::new(|ui| {
             ui.horizontal(|ui| {
                 // Mock sprite preview
-                let rect = ui.allocate_space(Vec2::new(40.0, 40.0)).1;
+                let rect = ui.allocate_space(egui::Vec2::new(40.0, 40.0)).1;
                 ui.painter().rect_filled(rect, 3.0, Color32::DARK_GRAY);
                 ui.painter().rect_stroke(rect, 3.0, Stroke::new(1.0, Color32::WHITE));
                 
@@ -577,25 +719,32 @@ impl InspectorPanel {
         }));
         
         field_layout(ui, "Material", Box::new(|ui| {
-            ui.text_edit_singleline(&mut material);
+            let text_edit = egui::TextEdit::singleline(&mut material)
+                .desired_width(ui.available_width() - 30.0);
+            ui.add(text_edit);
         }));
         
         field_layout(ui, "Sorting Layer", Box::new(|ui| {
+            let mut tmp_sorting_layer = sorting_layer;
             egui::ComboBox::from_id_source("sorting_layer")
-                .selected_text(sorting_layers[sorting_layer])
+                .selected_text(sorting_layers[tmp_sorting_layer])
                 .show_ui(ui, |ui| {
                     for (i, &layer_name) in sorting_layers.iter().enumerate() {
-                        ui.selectable_value(&mut sorting_layer, i, layer_name);
+                        if ui.selectable_label(tmp_sorting_layer == i, layer_name).clicked() {
+                            tmp_sorting_layer = i;
+                        }
                     }
                 });
+            sorting_layer = tmp_sorting_layer;
         }));
         
         field_layout(ui, "Order in Layer", Box::new(|ui| {
-            ui.add(egui::DragValue::new(&mut order_in_layer));
+            ui.add(egui::DragValue::new(&mut order_in_layer).speed(1));
         }));
         
         field_layout(ui, "Flip", Box::new(|ui| {
             ui.checkbox(&mut flip_x, "X");
+            ui.add_space(10.0);
             ui.checkbox(&mut flip_y, "Y");
         }));
     }
@@ -609,26 +758,33 @@ impl InspectorPanel {
         let mut angular_drag = 0.05;
         let mut gravity_scale = 1.0;
         let mut freeze_rotation = false;
+        let available_width = ui.available_width();
         
-        // Define field layout function
+        // Define field layout function with fixed widths
         let field_layout = |ui: &mut Ui, label: &str, content: Box<dyn FnOnce(&mut Ui)>| {
             ui.horizontal(|ui| {
-                ui.label(label);
-                ui.add_space(ui.available_width() * 0.3 - label.len() as f32 * 7.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    content(ui);
-                });
+                ui.add_sized([120.0, 20.0], egui::Label::new(label));
+                let content_width = available_width - 120.0;
+                ui.allocate_ui_with_layout(
+                    egui::Vec2::new(content_width, 20.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| { content(ui); }
+                );
             });
         };
         
         field_layout(ui, "Body Type", Box::new(|ui| {
+            let mut tmp_body_type = body_type;
             egui::ComboBox::from_id_source("body_type")
-                .selected_text(body_types[body_type])
+                .selected_text(body_types[tmp_body_type])
                 .show_ui(ui, |ui| {
                     for (i, &type_name) in body_types.iter().enumerate() {
-                        ui.selectable_value(&mut body_type, i, type_name);
+                        if ui.selectable_label(tmp_body_type == i, type_name).clicked() {
+                            tmp_body_type = i;
+                        }
                     }
                 });
+            body_type = tmp_body_type;
         }));
         
         field_layout(ui, "Mass", Box::new(|ui| {

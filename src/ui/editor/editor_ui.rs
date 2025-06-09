@@ -1,5 +1,6 @@
 use egui::{Context, RichText, Ui, Window, SidePanel, TopBottomPanel, CentralPanel, Style, Visuals, Color32, Stroke, Rect};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use crate::ui::editor::{
     ui_components::{ProjectTab, LogLevel, ConsoleLog, ProjectFile, ProjectFileType, 
     EntityComponent, ComponentType, EntityTransform, HierarchyItem, 
@@ -82,8 +83,8 @@ impl EditorUI {
     pub fn new() -> Self {
         let hierarchy_panel = HierarchyPanel::new();
         let mut inspector_panel = InspectorPanel::new();
-        let project_panel = ProjectPanel::new();
         let mut scene_view_panel = SceneViewPanel::new();
+        let project_panel = ProjectPanel::new();
         let game_view_panel = GameViewPanel::new();
         let audio_panel = AudioPanel::new();
         let console_panel = ConsolePanel::new();
@@ -91,8 +92,9 @@ impl EditorUI {
         // Share entity names with scene view
         scene_view_panel.set_entity_names(hierarchy_panel.entity_names.clone());
         
-        // Share entity transforms with inspector
-        inspector_panel.set_entity_transforms(scene_view_panel.entity_transforms.clone());
+        // Share entity transforms between inspector and scene view using the same Arc<Mutex<>>
+        let entity_transforms = scene_view_panel.get_entity_transforms();
+        inspector_panel.set_entity_transforms(entity_transforms);
         
         Self {
             hierarchy_panel,
@@ -168,8 +170,24 @@ impl EditorUI {
         // Apply Unity-like theme
         self.set_theme(ctx);
         
-        // Update the selected entity in scene view based on hierarchy
-        self.scene_view_panel.set_selected_entity(self.hierarchy_panel.selected_entity);
+        // Sinkronisasi entity names dari hierarchy ke scene view
+        self.scene_view_panel.set_entity_names(self.hierarchy_panel.entity_names.clone());
+        
+        // Sinkronisasi dua arah antara hierarchy dan scene_view
+        // Jika scene_view memiliki entity yang dipilih, update hierarchy_panel
+        if self.scene_view_panel.selected_entity.is_some() && 
+           self.scene_view_panel.selected_entity != self.hierarchy_panel.selected_entity {
+            self.hierarchy_panel.selected_entity = self.scene_view_panel.selected_entity;
+            ctx.request_repaint(); // Force repaint untuk mengupdate UI segera
+        }
+        // Jika hierarchy_panel memiliki entity yang dipilih, update scene_view
+        else if self.hierarchy_panel.selected_entity.is_some() && 
+                self.hierarchy_panel.selected_entity != self.scene_view_panel.selected_entity {
+            self.scene_view_panel.set_selected_entity(self.hierarchy_panel.selected_entity);
+            ctx.request_repaint(); // Force repaint untuk mengupdate UI segera
+        }
+        
+        // Update scene view tool dari toolbar
         self.scene_view_panel.scene_view_tool = self.toolbar.transform_tool.clone();
         
         // Collect log messages first
@@ -200,6 +218,12 @@ impl EditorUI {
             .show(ctx, |ui| {
                 self.inspector_panel.render(ui, self.hierarchy_panel.selected_entity, 
                                           &self.hierarchy_panel.entity_names, &mut log_info);
+                
+                // Jika perubahan dilakukan di inspector, request repaint
+                if self.inspector_panel.dirty {
+                    ctx.request_repaint();
+                    self.inspector_panel.dirty = false;
+                }
             });
         
         // Bottom with project panel
@@ -257,11 +281,22 @@ impl EditorUI {
                 
                 ui.separator();
                 
-                // Display active view
                 match self.active_view {
                     ActiveView::Scene => {
+                        // Pastikan pengaturan grid diterapkan ke scene view
                         self.scene_view_panel.show_grid = self.show_grid;
+                        
+                        // Render scene view
                         self.scene_view_panel.render(ui, &mut log_info);
+                        
+                        // Jika perubahan dilakukan di scene view, force refresh inspector
+                        if self.scene_view_panel.dirty {
+                            // Reset dirty flag
+                            self.scene_view_panel.dirty = false;
+                            
+                            // Force repaint untuk memastikan UI diupdate
+                            ctx.request_repaint();
+                        }
                     },
                     ActiveView::Game => {
                         self.game_view_panel.render(ui, &mut log_info);
@@ -269,7 +304,7 @@ impl EditorUI {
                 }
             });
         
-        // Process collected log messages
+        // Add log messages
         for message in messages {
             self.console_panel.log_info(&message);
         }

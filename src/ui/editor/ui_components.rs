@@ -69,12 +69,81 @@ pub struct EntityComponent {
     pub removable: bool,
 }
 
-/// Entity transform data
-#[derive(Debug, Clone)]
+/// Entity transform component
+#[derive(Clone, Debug)]
 pub struct EntityTransform {
+    /// Position in 3D space [x, y, z]
     pub position: [f32; 3],
+    /// Rotation in degrees [x, y, z]
     pub rotation: [f32; 3],
+    /// Scale in 3D space [x, y, z]
     pub scale: [f32; 3],
+    /// Last update timestamp - untuk mendeteksi perubahan
+    pub last_update: f64,
+}
+
+impl Default for EntityTransform {
+    fn default() -> Self {
+        Self {
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
+            last_update: 0.0,
+        }
+    }
+}
+
+impl EntityTransform {
+    /// Create a new transform
+    pub fn new(position: [f32; 3], rotation: [f32; 3], scale: [f32; 3]) -> Self {
+        Self {
+            position,
+            rotation,
+            scale,
+            last_update: 0.0,
+        }
+    }
+    
+    /// Get position vector
+    pub fn get_position(&self) -> [f32; 3] {
+        self.position
+    }
+    
+    /// Set position vector
+    pub fn set_position(&mut self, position: [f32; 3]) {
+        self.position = position;
+        self.update_timestamp();
+    }
+    
+    /// Get rotation in degrees
+    pub fn get_rotation(&self) -> [f32; 3] {
+        self.rotation
+    }
+    
+    /// Set rotation in degrees
+    pub fn set_rotation(&mut self, rotation: [f32; 3]) {
+        self.rotation = rotation;
+        self.update_timestamp();
+    }
+    
+    /// Get scale vector
+    pub fn get_scale(&self) -> [f32; 3] {
+        self.scale
+    }
+    
+    /// Set scale vector
+    pub fn set_scale(&mut self, scale: [f32; 3]) {
+        self.scale = scale;
+        self.update_timestamp();
+    }
+    
+    /// Update timestamp to current time
+    fn update_timestamp(&mut self) {
+        self.last_update = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+    }
 }
 
 /// Hierarchy item for representing entity hierarchies

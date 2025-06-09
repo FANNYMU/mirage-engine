@@ -1,17 +1,17 @@
 use glam::Vec3;
 
-/// Struktur yang merepresentasikan pendengar audio untuk audio 3D
+/// Structure representing an audio listener for 3D audio
 #[derive(Debug, Clone, Copy)]
 pub struct AudioListener {
-    /// Posisi pendengar dalam ruang 3D
+    /// Listener position in 3D space
     pub position: Vec3,
     
-    /// Arah hadap pendengar
+    /// Listener forward direction
     pub forward: Vec3,
 }
 
 impl AudioListener {
-    /// Membuat instance baru AudioListener
+    /// Create a new AudioListener instance
     pub fn new(position: Vec3, forward: Vec3) -> Self {
         Self {
             position,
@@ -19,17 +19,17 @@ impl AudioListener {
         }
     }
     
-    /// Mengatur posisi pendengar
+    /// Set the listener position
     pub fn set_position(&mut self, position: Vec3) {
         self.position = position;
     }
     
-    /// Mengatur arah hadap pendengar
+    /// Set the listener forward direction
     pub fn set_forward(&mut self, forward: Vec3) {
         self.forward = forward.normalize();
     }
     
-    /// Menghitung jarak ke posisi target
+    /// Calculate distance to target position
     pub fn distance_to(&self, position: Vec3) -> f32 {
         self.position.distance(position)
     }

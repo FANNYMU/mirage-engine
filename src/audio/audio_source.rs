@@ -3,36 +3,36 @@ use anyhow::{Result, anyhow};
 
 use super::audio_engine::AudioCategory;
 
-/// Struktur yang merepresentasikan sumber audio
+/// Structure representing an audio source
 #[derive(Debug)]
 pub struct AudioSource {
-    /// ID unik untuk audio source
+    /// Unique ID for the audio source
     pub id: String,
     
-    /// Path ke file audio
+    /// Path to the audio file
     pub path: PathBuf,
     
-    /// Kategori audio (musik, efek suara, dll)
+    /// Audio category (music, sound effects, etc.)
     pub category: AudioCategory,
 }
 
 impl AudioSource {
-    /// Membuat instance baru AudioSource
+    /// Create a new AudioSource instance
     pub fn new(id: String, path: PathBuf, category: AudioCategory) -> Result<Self> {
-        // Validasi bahwa file ada
+        // Validate that the file exists
         if !path.exists() {
-            return Err(anyhow!("File audio '{}' tidak ditemukan", path.display()));
+            return Err(anyhow!("Audio file '{}' not found", path.display()));
         }
         
-        // Validasi ekstensi file
+        // Validate file extension
         let extension = path.extension()
             .and_then(|ext| ext.to_str())
-            .ok_or_else(|| anyhow!("File audio tidak memiliki ekstensi yang valid"))?;
+            .ok_or_else(|| anyhow!("Audio file doesn't have a valid extension"))?;
         
-        // Validasi format yang didukung
+        // Validate supported formats
         match extension.to_lowercase().as_str() {
             "mp3" | "wav" | "flac" | "ogg" => {},
-            _ => return Err(anyhow!("Format file '{}' tidak didukung", extension)),
+            _ => return Err(anyhow!("File format '{}' not supported", extension)),
         }
         
         Ok(Self {
